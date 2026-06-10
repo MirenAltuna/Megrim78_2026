@@ -1,0 +1,478 @@
+---
+  title: "SOP correction for the assessment of Megrim (*Lepidorhombus whiffiagonis*) in Divisions 7.b-k, 8.a, 8.b, and 8.d"
+author: 
+  - Miren Altuna-Etxabe 
+- Santiago Cerviño
+- Dorleta García
+date: today
+bibliography: docs/ref.bib 
+format: 
+  html:
+  toc: true
+toc-depth: 5
+css: docs/styles.css
+fig-cap: true
+fig-cap-location: bottom
+self-contained: true
+#   code-fold: true
+# pdf:
+# toc: true
+# toc-depth: 5
+# css: styles.css
+# number-sections: true
+# fig-pos: 'H'
+# fig-cap: true
+# fig-cap-location: bottom
+# code-block-font-size: 10pt
+# code-block-wrap: true
+# documentclass: article
+# keep-tex: true
+# pdf-engine: xelatex
+# mainfont: "Arial"
+# block-headings: true
+# include-in-header: preamble.tex
+# include-before-toc: | 
+# \clearpage
+# include-after-toc: | 
+# \clearpage
+execute:
+  crossref: true
+---
+  \newpage
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+\newpage
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+library(tidyr)
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(FLCore)
+
+last.yr = 2025
+```
+There are SOP problems in the catch, landings and discards of the last year data (@fig-sop).
+
+```{r}
+#| echo: false
+#| label: fig-sop
+#| fig-cap: "Percentage differences between the total reported catch, landings and discards and the sum of the product of numbers-at-age and weigth-at-age."
+#| message: false
+#| warning: false
+
+# load original data without removing stock@catch.n['1',as.character(1984:2000)]
+load("Input/bootstrap/data/stock/meg78_stock.RData")
+
+# CATCH SOP problem
+nwt <- c(apply(stock@catch.n * stock@catch.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@catch)
+diff_c <- total / nwt
+diff_c_prc <- as.numeric((1 - diff_c) * 100)
+
+catch.sop <- data.frame(
+  year = dimnames(stock@catch)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_c,
+  Diff_prc = round(diff_c_prc, 2)
+)
+
+# LANDINGS SOP problem
+nwt <- c(apply(stock@landings.n * stock@landings.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@landings)
+diff_l <- total / nwt
+diff_l_prc <- as.numeric((1 - diff_l) * 100)
+
+landings.sop <- data.frame(
+  year = dimnames(stock@landings)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_l,
+  Diff_prc = round(diff_l_prc, 2)
+)
+
+# DISCARDS SOP problem
+nwt <- c(apply(stock@discards.n * stock@discards.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@discards)
+diff_d <- total / nwt
+diff_d_prc <- as.numeric((1 - diff_d) * 100)
+
+discards.sop <- data.frame(
+  year = dimnames(stock@discards)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_d,
+  Diff_prc = round(diff_d_prc, 2)
+)
+
+# SOP summary table
+sop <- data.frame(
+  year = dimnames(stock@catch)$year,
+  catch = round(diff_c_prc, 2),
+  landings = round(diff_l_prc, 2),
+  discards = round(diff_d_prc, 2)
+)
+
+sop[sop == -Inf] <- ""
+
+sop_long <- sop %>%
+  mutate(
+    Catch = as.numeric(catch),
+    Landings = as.numeric(landings),
+    Discards = as.numeric(discards)) %>%
+ pivot_longer(cols = c(Catch, Landings, Discards),
+               names_to = "type",
+               values_to = "value") %>% select(year, type, value)
+
+sop_long$type    <- factor(sop_long$type, levels = c("Catch", "Landings", "Discards"))
+
+sop_long <- sop_long %>% filter(year == last.yr)
+
+# SOP summary PLOT
+ggplot(sop_long, aes(x = factor(year), y = value, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Year", y = "Difference (%)", fill = "Type") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, vjust =1))
+```
+
+We analyzed the input data submitted by each country in the last year. Our evaluation shows that the product of numbers-at-age and weight-at-age for both landings and discards does not consistently match the reported totals for these categories at the country level. These discrepancies are visualized in @fig-input_ctry.
+
+In this case, we also analize the discrepancies in 2022 because there was a error in Belgium landings data and we recalculate the SOP error and correct them. The number of individuals used in the assessment as landings for Belgium in 2022 was incorrect, as it actually corresponded to the sum of landings and discards.
+
+This inconsistency indicates that the differences observed in the total SOP originate from the input data submitted by individual countries.
+
+```{r}
+#| echo: false
+#| label: fig-input_ctry
+#| fig-cap: "Differences in percentage between the product of numbers-at-age and weight-at-age for both landings and discards and the reported totals for these categories at the country level over the last three years. Countries: BE = Belgium, FR = France, IR = Ireland, SP = Spain, UK = United Kingdom."
+#| message: false
+#| warning: false
+
+LD_cntry <- read_excel("Input/Ctry_info/TLD_cntry.xlsx")
+LD_age_cntry <- read_excel("Input/Ctry_info/LD_age_cntry.xlsx") # Original nind and wt from intercatch
+
+LD_cntry_wt_ind <- LD_age_cntry %>%
+  pivot_longer(cols = `1`:`10`, names_to = "age", values_to = "value")%>%
+  pivot_wider(names_from = param, values_from = value) %>%
+  select(year, country, catch.cat, age, wt, nind)
+
+# calculate the difference among total landings/discards and the sum of the nind*wt by country
+LD_age_cntry_long <- LD_cntry_wt_ind %>%
+  mutate(twt = wt*nind) %>%
+  group_by(year, country, catch.cat) %>% 
+  summarise(total_wtnind = sum(twt), .groups = "drop") %>%
+  select(year, country, catch.cat, total_wtnind)
+
+LD_cntry_info <- full_join(LD_age_cntry_long, LD_cntry, by = c("year", "country", "catch.cat"))
+
+LD_cntry_info <- LD_cntry_info %>%
+  mutate(diff = round(as.numeric(LD_cntry_info$total/LD_cntry_info$total_wtnind),2),
+         diff_prc = (1 - as.numeric(diff)) * 100,
+         year = as.factor(year),
+         catch.cat = case_when(
+                      catch.cat == "discards" ~ "Discards",
+                      catch.cat == "landings" ~ "Landings",
+                      TRUE ~ catch.cat  # mantiene los demás valores sin cambios
+                    )) %>% filter(year %in% c(2022, last.yr))
+
+LD_cntry_info$catch.cat <- factor(LD_cntry_info$catch.cat, levels = c("Landings", "Discards"))
+
+ggplot(LD_cntry_info, aes(x = country, y = diff_prc, fill = factor(year))) +
+                    geom_bar(stat = "identity", position = "dodge") +
+                    facet_grid(. ~ catch.cat) +
+                    labs(
+                      x = "Country",
+                      y = "Difference (%)",
+                      fill = "Year") +
+                    theme_bw() +
+                    theme(axis.text.x = element_text(hjust = 0.5),
+                          strip.text = element_text(size = 16))
+```
+
+To address the SOP-related issues affecting the catch, landings, and discards data, the SOP corrections in numbers-at-age level were applied at landings and discards level separately at country level using the mean weight-at-age across all countries to ensure consistency with total reported values. SOP issues in catch data were addressed by summing the updated numbers of individuals from landings and discards, and calculating the total catch weight using a weighted average of the weight-at-age data from landings and discards.
+
+```{r}
+#| echo: false
+#| results: "hide"
+#| message: false
+#| warning: false
+
+# At country level + total wt
+landings.wt <- as.data.frame(stock@landings.wt)
+landings.wt<- landings.wt %>% 
+  mutate(wt = 1000*data, catch.cat = "landings") %>%
+  select(year, catch.cat, age, wt)
+
+discards.wt <- as.data.frame(stock@discards.wt)
+discards.wt<- discards.wt %>%
+  mutate(wt = 1000*data, catch.cat = "discards") %>%
+  select(year, catch.cat, age, wt)
+
+LD_total_wt <- rbind(landings.wt, discards.wt)
+LD_cntry_wt_ind <- LD_cntry_wt_ind %>% mutate(age=as.numeric(age))
+
+LD_joined <- LD_cntry_wt_ind %>% mutate(nind = if_else(catch.cat == "discards" & age == 9 |catch.cat == "discards" & age == 10, 0, nind)) %>%
+  inner_join(
+    LD_total_wt %>% select(year, catch.cat, age, wt),
+    by = c("year", "catch.cat", "age"),
+    suffix = c("_cntry", "_total")
+  )
+
+LD_joined_wt_total <- LD_joined %>%
+  select(year, country, catch.cat, age, wt_total, nind)  %>%
+  mutate(totalwt = wt_total*nind) %>%
+  group_by(year, country, catch.cat) %>% 
+  summarise(total_totalwt = sum(totalwt), .groups = "drop") %>%
+  select(year, country, catch.cat, total_totalwt)
+
+LD_joined_wt_total <- full_join(LD_joined_wt_total, LD_cntry, by = c("year", "country", "catch.cat"))
+LD_joined_wt_total$diff <-round(LD_joined_wt_total$total/LD_joined_wt_total$total_totalwt, 2)
+LD_joined_wt_total$multiplier <- LD_joined_wt_total$total/LD_joined_wt_total$total_totalwt
+
+ctry_sop_dif <- LD_joined_wt_total
+
+cols_to_multiply <- as.character(1:10)
+LD_ctry <- LD_age_cntry  %>% filter(param == "nind") %>%
+  left_join(LD_joined_wt_total %>% select(year, country, catch.cat, multiplier),
+            by = c("year", "country", "catch.cat")) %>%
+  mutate(across(all_of(cols_to_multiply), ~ .x * multiplier))
+
+LD_ctry <- LD_ctry %>% select(-multiplier)
+LD_ctry <- LD_ctry %>%
+  group_by(year, catch.cat) %>%
+  summarise(across(`1`:`10`, sum), .groups = "drop") %>% 
+  mutate( `9` = if_else(catch.cat == "discards", 0, `9`),
+          `10` = if_else(catch.cat == "discards", 0, `10`))
+
+for (year in last.yr) {
+  stock@landings.n[,ac(year)] <- as.numeric(LD_ctry[LD_ctry$year==year & LD_ctry$catch.cat=="landings", -c(1:2)])
+  stock@discards.n[,ac(year)] <- as.numeric(LD_ctry[LD_ctry$year==year & LD_ctry$catch.cat=="discards", -c(1:2)])
+}
+
+
+# Catch nind
+for (year in last.yr) {
+  stock@catch.n[,ac(year)] <- stock@landings.n[,ac(year)] + stock@discards.n[,ac(year)]
+}
+
+# wt
+landings.n <- as.data.frame(stock@landings.n) %>% filter(year == last.yr) %>% select(age, year, data) %>% rename(n_landings = data)
+landings.wt <- landings.wt %>% filter(year == last.yr) %>% select(age, year, wt) %>% rename(wt_landings = wt)
+
+discards.n <- as.data.frame(stock@discards.n) %>% filter(year == last.yr) %>% select(age, year, data)%>% rename(n_discards = data)
+discards.wt <- discards.wt %>% filter(year == last.yr) %>% select(age, year, wt) %>% rename(wt_discards = wt)
+
+df <- landings.n %>%
+  left_join(landings.wt, by = c("year", "age")) %>%
+  left_join(discards.n, by = c("year", "age")) %>%
+  left_join(discards.wt, by = c("year", "age"))
+
+df <- df %>% 
+  mutate(
+    n_landings = replace_na(n_landings, 0),
+    n_discards = replace_na(n_discards, 0),
+    wt_discards = replace_na(wt_discards, 0),
+    WT = case_when(
+      (n_landings + n_discards) > 0 ~
+        (n_landings * wt_landings + n_discards * wt_discards) /
+        (n_landings + n_discards),
+      TRUE ~ NA_real_
+    )
+  )
+
+df_wide <- df %>%
+  select(year, age, WT) %>%
+  pivot_wider(names_from = age, values_from = WT)
+
+for (year in last.yr) {
+  stock@catch.wt[,ac(year)] <- as.numeric(df_wide[df_wide$year==year, -1])/1000
+}
+
+save(stock, file="Input/bootstrap/data/stock/meg78_stock_sop_corrected.RData")
+```
+
+```{r}
+
+## To correct 2022 BE error
+
+landings.wt <- as.data.frame(stock@landings.wt)
+landings.wt<- landings.wt %>% 
+  mutate(wt = 1000*data, catch.cat = "landings") %>%
+  select(year, catch.cat, age, wt)
+
+discards.wt <- as.data.frame(stock@discards.wt)
+discards.wt<- discards.wt %>%
+  mutate(wt = 1000*data, catch.cat = "discards") %>%
+  select(year, catch.cat, age, wt)
+
+LD_total_wt <- rbind(landings.wt, discards.wt)
+LD_cntry_wt_ind <- LD_cntry_wt_ind %>% mutate(age=as.numeric(age))
+
+LD_joined <- LD_cntry_wt_ind %>% mutate(nind = if_else(catch.cat == "discards" & age == 9 |catch.cat == "discards" & age == 10, 0, nind)) %>%
+  inner_join(
+    LD_total_wt %>% select(year, catch.cat, age, wt),
+    by = c("year", "catch.cat", "age"),
+    suffix = c("_cntry", "_total")
+  )
+
+LD_joined_wt_total <- LD_joined %>%
+  select(year, country, catch.cat, age, wt_total, nind)  %>%
+  mutate(totalwt = wt_total*nind) %>%
+  group_by(year, country, catch.cat) %>% 
+  summarise(total_totalwt = sum(totalwt), .groups = "drop") %>%
+  select(year, country, catch.cat, total_totalwt)
+
+LD_joined_wt_total <- full_join(LD_joined_wt_total, LD_cntry, by = c("year", "country", "catch.cat"))
+LD_joined_wt_total$diff <-round(LD_joined_wt_total$total/LD_joined_wt_total$total_totalwt, 2)
+LD_joined_wt_total$multiplier <- LD_joined_wt_total$total/LD_joined_wt_total$total_totalwt
+
+ctry_sop_dif <- LD_joined_wt_total
+
+cols_to_multiply <- as.character(1:10)
+LD_ctry <- LD_age_cntry  %>% filter(param == "nind") %>%
+  left_join(LD_joined_wt_total %>% select(year, country, catch.cat, multiplier),
+            by = c("year", "country", "catch.cat")) %>%
+  mutate(across(all_of(cols_to_multiply), ~ .x * multiplier))
+
+LD_ctry <- LD_ctry %>% select(-multiplier)
+LD_ctry <- LD_ctry %>%
+  group_by(year, catch.cat) %>%
+  summarise(across(`1`:`10`, sum), .groups = "drop") %>% 
+  mutate( `9` = if_else(catch.cat == "discards", 0, `9`),
+          `10` = if_else(catch.cat == "discards", 0, `10`))
+
+
+for (year in c(2022)) {
+  stock@landings.n[,ac(year)] <- as.numeric(LD_ctry[LD_ctry$year==year & LD_ctry$catch.cat=="landings", -c(1:2)])
+  stock@discards.n[,ac(year)] <- as.numeric(LD_ctry[LD_ctry$year==year & LD_ctry$catch.cat=="discards", -c(1:2)])
+}
+
+
+# Catch nind
+for (year in c(2022)) {
+  stock@catch.n[,ac(year)] <- stock@landings.n[,ac(year)] + stock@discards.n[,ac(year)]
+}
+
+# wt
+landings.n <- as.data.frame(stock@landings.n) %>% filter(year == 2022) %>% select(age, year, data) %>% rename(n_landings = data)
+landings.wt <- landings.wt %>% filter(year == 2022) %>% select(age, year, wt) %>% rename(wt_landings = wt)
+
+discards.n <- as.data.frame(stock@discards.n) %>% filter(year == 2022) %>% select(age, year, data)%>% rename(n_discards = data)
+discards.wt <- discards.wt %>% filter(year == 2022) %>% select(age, year, wt) %>% rename(wt_discards = wt)
+
+df <- landings.n %>%
+  left_join(landings.wt, by = c("year", "age")) %>%
+  left_join(discards.n, by = c("year", "age")) %>%
+  left_join(discards.wt, by = c("year", "age"))
+
+df <- df %>%
+  mutate(
+    n_landings = replace_na(n_landings, 0),
+    n_discards = replace_na(n_discards, 0),
+    wt_discards = replace_na(wt_discards, 0),
+    WT = case_when(
+      (n_landings + n_discards) > 0 ~
+        (n_landings * wt_landings + n_discards * wt_discards) /
+        (n_landings + n_discards),
+      TRUE ~ NA_real_
+    )
+  )
+
+df_wide <- df %>%
+  select(year, age, WT) %>%
+  pivot_wider(names_from = age, values_from = WT)
+
+  stock@catch.wt[,ac(2022)] <- as.numeric(df_wide[df_wide$year==2022, -1])/1000
+  
+  save(stock, file="Input/bootstrap/data/stock/meg78_stock_sop_BE_corrected.RData")
+
+```
+
+Chek if the sop problem in the last year is solved or not
+
+```{r}
+#| echo: false
+#| label: fig-sop
+#| fig-cap: "Percentage differences between the total reported catch, landings and discards and the sum of the product of numbers-at-age and weigth-at-age."
+#| message: false
+#| warning: false
+
+# CATCH SOP problem
+nwt <- c(apply(stock@catch.n * stock@catch.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@catch)
+diff_c <- total / nwt
+diff_c_prc <- as.numeric((1 - diff_c) * 100)
+
+catch.sop <- data.frame(
+  year = dimnames(stock@catch)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_c,
+  Diff_prc = round(diff_c_prc, 2)
+)
+
+# LANDINGS SOP problem
+nwt <- c(apply(stock@landings.n * stock@landings.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@landings)
+diff_l <- total / nwt
+diff_l_prc <- as.numeric((1 - diff_l) * 100)
+
+landings.sop <- data.frame(
+  year = dimnames(stock@landings)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_l,
+  Diff_prc = round(diff_l_prc, 2)
+)
+
+# DISCARDS SOP problem
+nwt <- c(apply(stock@discards.n * stock@discards.wt, 2, function(x) sum(x, na.rm = TRUE)))
+total <- c(stock@discards)
+diff_d <- total / nwt
+diff_d_prc <- as.numeric((1 - diff_d) * 100)
+
+discards.sop <- data.frame(
+  year = dimnames(stock@discards)$year,
+  nwt = nwt,
+  Total = total,
+  Diff = diff_d,
+  Diff_prc = round(diff_d_prc, 2)
+)
+
+# SOP summary table
+sop <- data.frame(
+  year = dimnames(stock@catch)$year,
+  catch = round(diff_c_prc, 2),
+  landings = round(diff_l_prc, 2),
+  discards = round(diff_d_prc, 2)
+)
+
+sop[sop == -Inf] <- ""
+
+sop_long <- sop %>%
+  mutate(
+    Catch = as.numeric(catch),
+    Landings = as.numeric(landings),
+    Discards = as.numeric(discards)) %>%
+ pivot_longer(cols = c(Catch, Landings, Discards),
+               names_to = "type",
+               values_to = "value") %>% select(year, type, value)
+
+sop_long$type    <- factor(sop_long$type, levels = c("Catch", "Landings", "Discards"))
+
+sop_long <- sop_long %>% filter(year == c(last.yr, 2022))
+
+# SOP summary PLOT
+ggplot(sop_long, aes(x = factor(year), y = value, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Year", y = "Difference (%)", fill = "Type") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1, vjust =1))
+```
