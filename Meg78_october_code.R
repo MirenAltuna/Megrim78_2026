@@ -113,9 +113,9 @@ results <- run_retro_analysis_mcmc(stock, index,
                                    back = 5)
 
 results$rho_table <- results$rho_table %>% mutate(x = 2025, y = 0)
-results$rho_table$qname <- c("F" = "F", "SSB" = "SSB", "Recruitment" = "Rec", "Catch" = "Catch")
+results$rho_table$qname <- c("F" = "F", "SSB" = "SB", "Recruitment" = "Rec", "Catch" = "C")
 
-new_names <- c("Rec" = "Recruitment", "SSB" = "SSB", "Catch" = "Catch", "F" = "F")
+new_names <- c("Rec" = "Recruitment", "SSB" = "SSB", "C" = "Catch", "F" = "F")
 plot(FLStocks(results$retro), col = 1, lwd = 1) +
   facet_wrap(~qname, scales = 'free_y', labeller = labeller(qname = new_names)) +
   geom_text(
