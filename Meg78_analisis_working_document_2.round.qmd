@@ -1388,6 +1388,8 @@ index_sep[["IGFS"]]@desc <- "Numbers per 10 hours fished"
 
 index_sep <- index_sep[c("SP_PORC","IGFS", "EVHOE")]
 index_sep_org <- index_sep
+
+save(index_sep, file = "Input/IGFS_EVHOE_index/index_sep.RData")
 ```
 
 ```{r}
@@ -1422,8 +1424,9 @@ index_sep_pg[[3]] <- reduce_pg_index(index_sep_pg[[3]], 7)
 index_sep_pg[[3]]@index[,"2017"] <- NA
 
 # The following changes were defined in the 2025 review level Benchmark of Megrim (ICES, 2025).
-index_sep_pg[[2]]@index[ac(1:3),ac(2015:2021)] <- NA # IRLFR
-index_sep_pg[[1]]@index[ac(1:3),ac(2015:2021)] <- NA # Porcupine
+index_sep_pg[[1]]@index[ac(1:3),ac(2015:2021)] <- NA 
+index_sep_pg[[2]]@index[ac(1:3),ac(2015:2021)] <- NA 
+index_sep_pg[[3]]@index[ac(1:3),ac(2015:2021)] <- NA 
 
 # New changes
 index_sep_pg[["EVHOE"]]@index[,ac(2019:2020)] <- NA
@@ -1477,7 +1480,7 @@ plot(FLStocks(results$retro), col = 1, lwd = 1) +
 fitted <- predict(pars(fit1))
 a  <- xyplot(data~age,groups=year,stk1@harvest,type='b',ylim=c(0,1),ylab='F',main='Fishing mortality')
 a1 <- xyplot(data~age,groups=year,data=fitted$qmodel[1],type='b',ylab='Catchability',main="Porcupine")
-a2 <- xyplot(data~age,groups=year,data=fitted$qmodel[2],type='b',ylab='Catchability',main="IRLFR")
+a2 <- xyplot(data~age,groups=year,data=fitted$qmodel[2],type='b',ylab='Catchability',main="IGFS")
 a3 <- xyplot(data~age,groups=year,data=fitted$qmodel[3],type='b',ylab='Catchability',main="EVHOE")
 grid.arrange(a,a1,a2, a3, ncol=2)
 ```

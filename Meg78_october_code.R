@@ -17,6 +17,7 @@ library(proxy)
 library(stringr)
 library(FLa4a)
 
+setwd("C:/USE/GitHub/Megrim78_2026")
 set.seed(1234)
 
 load("model/MegFit_Final.Rdata")
