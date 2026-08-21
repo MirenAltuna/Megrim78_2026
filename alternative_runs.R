@@ -112,37 +112,37 @@ idx7[[1]]@index[ac(1:3),ac(2015:2021)] <- NA # Porcupine
 idx7[[2]]@index[ac(1:3),ac(2015:2021)] <- NA # IGFS
 idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 
-## RUNS (Ernesto) ----
-fit00 <- sca(stk7, idx7)
-res00 <- residuals(fit00, stk7, idx7)
-plot(res00)
-plot(res00, by = "age")
-
-fmod <- ~te(age, year, k = c(5, 10), bs = "tp", by=as.numeric(year>2000)) + s(age, k = 5) + s(year, k=10) + s(year, k=5, by=as.numeric(age==7))
-srmod <- ~I(as.numeric(year<=1996)) + s(year, k=10, by=as.numeric(year>=1997))
-qmod <- list(~factor(age),~factor(age), ~factor(age))
-fit01 <- sca(stk7, idx7, fmodel=fmod, srmodel=srmod, qmodel=qmod)
-res01 <- residuals(fit01, stk7, idx7)
-plot(res01)
-
-cthDg01 <- computeCatchDiagnostics(fit01, stk7)
-plot(cthDg01)
-plot(cthDg01, type="prediction", probs=c(0.025, 0.975))
-
-n <- 4
-# list to hold data for retrospective fits
-nret <- as.list(1:n)
-stks <- FLStocks(lapply(nret, function(x){window(stk7, end=(range(stk7)["maxyear"]-x))}))
-idxs <- lapply(nret, function(x){window(idx7, end=(range(idx7)["maxyear"]-x))})
-# fit to each list element, note scas can be paralelized
-fits01 <- scas(stks, idxs, fmodel=list(fmod), srmodel=list(srmod), qmodel=list(qmod), workers=n)
-# update stock object with fit
-stks <- stks + fits01
-# add candidate fit
-stks[[5]] <- stk7 + simulate(fit01, 250)
-plot(window(stks, start=2000)) + theme(legend.position = "none") + scale_colour_manual(values = rep("black", n+1))
-
-plot(stk7 + simulate(fit01, 250))
+# ## RUNS (Ernesto) ----
+# fit00 <- sca(stk7, idx7)
+# res00 <- residuals(fit00, stk7, idx7)
+# plot(res00)
+# plot(res00, by = "age")
+# 
+# fmod <- ~te(age, year, k = c(5, 10), bs = "tp", by=as.numeric(year>2000)) + s(age, k = 5) + s(year, k=10) + s(year, k=5, by=as.numeric(age==7))
+# srmod <- ~I(as.numeric(year<=1996)) + s(year, k=10, by=as.numeric(year>=1997))
+# qmod <- list(~factor(age),~factor(age), ~factor(age))
+# fit01 <- sca(stk7, idx7, fmodel=fmod, srmodel=srmod, qmodel=qmod)
+# res01 <- residuals(fit01, stk7, idx7)
+# plot(res01)
+# 
+# cthDg01 <- computeCatchDiagnostics(fit01, stk7)
+# plot(cthDg01)
+# plot(cthDg01, type="prediction", probs=c(0.025, 0.975))
+# 
+# n <- 4
+# # list to hold data for retrospective fits
+# nret <- as.list(1:n)
+# stks <- FLStocks(lapply(nret, function(x){window(stk7, end=(range(stk7)["maxyear"]-x))}))
+# idxs <- lapply(nret, function(x){window(idx7, end=(range(idx7)["maxyear"]-x))})
+# # fit to each list element, note scas can be paralelized
+# fits01 <- scas(stks, idxs, fmodel=list(fmod), srmodel=list(srmod), qmodel=list(qmod), workers=n)
+# # update stock object with fit
+# stks <- stks + fits01
+# # add candidate fit
+# stks[[5]] <- stk7 + simulate(fit01, 250)
+# plot(window(stks, start=2000)) + theme(legend.position = "none") + scale_colour_manual(values = rep("black", n+1))
+# 
+# plot(stk7 + simulate(fit01, 250))
 
 
 ## RUNS (Miren) ----
@@ -154,7 +154,7 @@ qmod <- list(~factor(age),~factor(age), ~factor(age))
 n1mod <- ~s(age, k = 3) 
 vmod <- list(~s(age, k = 3), ~1, ~1, ~1) 
 
-# Alternative options for srmodel
+## Alternative options for srmodel
 # # option 2 (all the index data available from 2003 onwards)
 # srmod <- ~ factor(ifelse(year < 2003, "pre2003", as.character(year)))
 # 
@@ -167,9 +167,13 @@ vmod <- list(~s(age, k = 3), ~1, ~1, ~1)
 # # option 5
 # srmod <- ~I(as.numeric(year<=1996)) + s(year, k=10, by=as.numeric(year>=1997))
 # 
-# Alternative options for fmodel
+## Alternative options for fmodel
 # fmod <- ~ti(age, year, k = c(3, 25))
 # fmod <- ~te(age, year, k = c(5, 26))
+# fmod <- ~ s(age, k = 6) + s(year, k = 20) + ti(age, year, k = c(6, 25))
+#
+## Alternative options for qmodel
+#qmod <- list(~s(age, k = 3),~s(age, k = 3), ~s(age, k = 3))
 
 # RUN
 fit01 <- sca(stk7, idx7, fmodel = fmod, qmodel = qmod, srmodel = srmod, vmodel = vmod, n1model = n1mod)
