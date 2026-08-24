@@ -45,7 +45,7 @@ load("Input/IGFS_EVHOE_index/index_sep.RData")
 
 ###### Put index weight as stock.wt
 
-df <- read.xlsx("C:/Users/maltuna/OneDrive - AZTI/Oilarra/WGBIE/WGBIE_2026/0.Original_country_data/Accession&email/Surveys/Weight/Hans/MegIndexMeanLen.xlsx")
+df <- read.xlsx("C:/USE/GitHub/Megrim78_2026/Input/IGFS_EVHOE_index/MegIndexMeanLen.xlsx")
 
 df2 <- df %>%
   mutate(MeanWeight = MeanWeight / 1000) # Pasar a kg
