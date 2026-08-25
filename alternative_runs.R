@@ -45,7 +45,7 @@ load("Input/IGFS_EVHOE_index/index_sep.RData")
 
 ###### Put index weight as stock.wt
 
-df <- read.xlsx("C:/USE/GitHub/Megrim78_2026/Input/IGFS_EVHOE_index/MegIndexMeanLen.xlsx")
+df <- read.xlsx("Input/IGFS_EVHOE_index/MegIndexMeanLen.xlsx")
 
 df2 <- df %>%
   mutate(MeanWeight = MeanWeight / 1000) # Pasar a kg
@@ -124,11 +124,11 @@ idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 # fit01 <- sca(stk7, idx7, fmodel=fmod, srmodel=srmod, qmodel=qmod)
 # res01 <- residuals(fit01, stk7, idx7)
 # plot(res01)
-# 
+#
 # cthDg01 <- computeCatchDiagnostics(fit01, stk7)
 # plot(cthDg01)
 # plot(cthDg01, type="prediction", probs=c(0.025, 0.975))
-# 
+#
 # n <- 4
 # # list to hold data for retrospective fits
 # nret <- as.list(1:n)
@@ -141,7 +141,7 @@ idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 # # add candidate fit
 # stks[[5]] <- stk7 + simulate(fit01, 250)
 # plot(window(stks, start=2000)) + theme(legend.position = "none") + scale_colour_manual(values = rep("black", n+1))
-# 
+#
 # plot(stk7 + simulate(fit01, 250))
 
 
@@ -149,6 +149,7 @@ idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 
 # option 1
 srmod <- ~ bevholt(CV = 0.3)
+srmod <- ~factor(replace(year, year<1997, 1997))
 fmod <- ~s(age, k = 3, by = breakpts(year, 2013)) + factor(year)
 qmod <- list(~factor(age),~factor(age), ~factor(age))
 n1mod <- ~s(age, k = 3) 
@@ -207,3 +208,18 @@ a1 <- xyplot(data~age,groups=year,data=fitted$qmodel[1],type='b',ylab='Catchabil
 a2 <- xyplot(data~age,groups=year,data=fitted$qmodel[2],type='b',ylab='Catchability',main="IGFS")
 a3 <- xyplot(data~age,groups=year,data=fitted$qmodel[3],type='b',ylab='Catchability',main="EVHOE")
 grid.arrange(a,a1,a2, a3, ncol=2)
+
+## Stock recruitment (remove years we set R to be constant)
+stk01.bh <- as.FLSR(window(stk01, start=1997), model="bevholt")
+stk01.bh <- fmle(stk01.bh)
+plot(stk01.bh)
+
+# segreg
+stk01.sr <- as.FLSR(window(stk01, start=1997), model="segreg")
+stk01.sr <- fmle(stk01.sr)
+plot(stk01.sr)
+
+## reference points
+stk01.rp <- FLBRP(stk01, stk01.bh)
+stk01.rp <- brp(stk01.rp)
+refpts(stk01.rp)
