@@ -13,6 +13,7 @@ library(dplyr)
 library(icesAdvice)
 library(gridExtra)
 library(openxlsx)
+library(FLBRP)
 
 set.seed(1234)
 
@@ -33,17 +34,85 @@ reduce_pg_index <- function(ix, pg = 7) {
   
   return(ix)
 }
+iterMedians <- function(x) {
+  # x es un FLQuant con iter
+  apply(x, c(1,2,3,4,5), median, na.rm = TRUE) |>
+    FLQuant(dimnames = c(dimnames(x)[1:5], list(iter = "1")),
+            units    = units(x))
+}
+fitMedian <- function(fit) {
+  
+  # 1. Mediana del stock (FLStock)
+  iterMedians <- function(x) {
+    apply(x, c(1,2,3,4,5), median, na.rm = TRUE) |>
+      FLQuant(dimnames = c(dimnames(x)[1:5], list(iter = "1")),
+              units    = units(x))
+  }
+  
+  stock_med <- qapply(fit, iterMedians)
+  
+  # 2. Predecir todas las iteraciones
+  fitted_all <- predict(pars(fit))
+  
+  # 3. Mediana de cada FLQuant dentro de predict()
+  fitted_med <- lapply(fitted_all, function(sublist) {
+    lapply(sublist, function(q) {
+      arr <- array(q[], dim = dim(q), dimnames = dimnames(q))
+      med <- apply(arr, c(1,2,3,4,5), median, na.rm = TRUE)
+      dim(med) <- c(dim(q)[1:5], 1)
+      dn <- dimnames(q)
+      dn$iter <- "1"
+      FLQuant(med, dimnames = dn, units = units(q))
+    })
+  })
+  
+  # 4. Reconstruir un objeto SCA con stock + fitted_med
+  out <- list(
+    stock   = stock_med,
+    stkmodel = fitted_med$stkmodel,
+    qmodel   = fitted_med$qmodel,
+    vmodel   = fitted_med$vmodel
+  )
+  
+  return(out)
+}
+residualsMedian <- function(res) {
+  
+  # Función interna para colapsar un FLQuant a la mediana
+  iterMedians <- function(x) {
+    arr <- array(x[], dim = dim(x), dimnames = dimnames(x))
+    med <- apply(arr, c(1,2,3,4,5), median, na.rm = TRUE)
+    
+    # reconstruir FLQuant con iter = 1
+    dim(med) <- c(dim(x)[1:5], 1)
+    dn <- dimnames(x)
+    dn$iter <- "1"
+    
+    FLQuant(med, dimnames = dn, units = units(x))
+  }
+  
+  # Aplicar a cada FLQuant dentro del objeto a4aFitResiduals
+  res_med_list <- lapply(res@.Data, iterMedians)
+  
+  # Reconstruir un objeto a4aFitResiduals
+  out <- new("a4aFitResiduals")
+  out@.Data <- res_med_list
+  out@names <- res@names
+  out@desc  <- paste(res@desc, "(median collapsed)")
+  out@lock  <- FALSE
+  
+  return(out)
+}
 
-source('./docs/retro_analysis_f.R') # retrospective function
+source('./docs/retro_analysis_f.R') # retrospective function simple
+source('./docs/retro_analysis_f_mcmc.R') # retrospective function mcmc
 
-## load the data
+## Load the data ----
 load("Input/bootstrap/data/stock/meg78_stock_sop_BE_corrected.RData")
 load("Input/IGFS_EVHOE_index/index_sep.RData")
 
-
-## prepare the data  ----
-
-###### Put index weight as stock.wt
+## Prepare the data ----
+# Put index weight as stock.wt
 
 df <- read.xlsx("Input/IGFS_EVHOE_index/MegIndexMeanLen.xlsx")
 
@@ -98,7 +167,7 @@ stock.wt <- FLQuant(arr)
 units(stock.wt) <- "kg"
 stock@stock.wt <- stock.wt
 
-###### Put plus group at age 7
+# Put plus group at age 7
 stk7 <- setPlusGroup(stock, 7)
 stk7@catch.n['1',as.character(1984:2000)] <- NA # We do not really believe that the increase in 1-year-olds in the catch is real so we shouldn't formulate a model that treats it as real.
 
@@ -112,79 +181,64 @@ idx7[[1]]@index[ac(1:3),ac(2015:2021)] <- NA # Porcupine
 idx7[[2]]@index[ac(1:3),ac(2015:2021)] <- NA # IGFS
 idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 
-# ## RUNS (Ernesto) ----
-# fit00 <- sca(stk7, idx7)
-# res00 <- residuals(fit00, stk7, idx7)
-# plot(res00)
-# plot(res00, by = "age")
-# 
-# fmod <- ~te(age, year, k = c(5, 10), bs = "tp", by=as.numeric(year>2000)) + s(age, k = 5) + s(year, k=10) + s(year, k=5, by=as.numeric(age==7))
-# srmod <- ~I(as.numeric(year<=1996)) + s(year, k=10, by=as.numeric(year>=1997))
-# qmod <- list(~factor(age),~factor(age), ~factor(age))
-# fit01 <- sca(stk7, idx7, fmodel=fmod, srmodel=srmod, qmodel=qmod)
-# res01 <- residuals(fit01, stk7, idx7)
-# plot(res01)
-#
-# cthDg01 <- computeCatchDiagnostics(fit01, stk7)
-# plot(cthDg01)
-# plot(cthDg01, type="prediction", probs=c(0.025, 0.975))
-#
-# n <- 4
-# # list to hold data for retrospective fits
-# nret <- as.list(1:n)
-# stks <- FLStocks(lapply(nret, function(x){window(stk7, end=(range(stk7)["maxyear"]-x))}))
-# idxs <- lapply(nret, function(x){window(idx7, end=(range(idx7)["maxyear"]-x))})
-# # fit to each list element, note scas can be paralelized
-# fits01 <- scas(stks, idxs, fmodel=list(fmod), srmodel=list(srmod), qmodel=list(qmod), workers=n)
-# # update stock object with fit
-# stks <- stks + fits01
-# # add candidate fit
-# stks[[5]] <- stk7 + simulate(fit01, 250)
-# plot(window(stks, start=2000)) + theme(legend.position = "none") + scale_colour_manual(values = rep("black", n+1))
-#
-# plot(stk7 + simulate(fit01, 250))
+## The best setting until now ----
 
-
-## RUNS (Miren) ----
-
-# option 1
 srmod <- ~ bevholt(CV = 0.3)
-srmod <- ~factor(replace(year, year<1997, 1997))
 fmod <- ~s(age, k = 3, by = breakpts(year, 2013)) + factor(year)
-qmod <- list(~factor(age),~factor(age), ~factor(age))
+qmod <- list(~s(age, k = 4),~s(age, k = 4), ~s(age, k = 4))
 n1mod <- ~s(age, k = 3) 
 vmod <- list(~s(age, k = 3), ~1, ~1, ~1) 
 
-## Alternative options for srmodel
-# # option 2 (all the index data available from 2003 onwards)
-# srmod <- ~ factor(ifelse(year < 2003, "pre2003", as.character(year)))
-# 
-# # option 3 (one index data available from 1997 onwards)
-# srmod <- ~ factor(ifelse(year < 1997, "pre1998", as.character(year)))
-#
-# # option 4 (no use factor use spline)
-# srmod <- ~ s(year, k=10, by=as.numeric(year>2003))
-#
-# # option 5
-# srmod <- ~I(as.numeric(year<=1996)) + s(year, k=10, by=as.numeric(year>=1997))
-# 
-## Alternative options for fmodel
-# fmod <- ~ti(age, year, k = c(3, 25))
-# fmod <- ~te(age, year, k = c(5, 26))
-# fmod <- ~ s(age, k = 6) + s(year, k = 20) + ti(age, year, k = c(6, 25))
-#
-## Alternative options for qmodel
-#qmod <- list(~s(age, k = 3),~s(age, k = 3), ~s(age, k = 3))
 
-# RUN
+### Simple RUN ----
 fit01 <- sca(stk7, idx7, fmodel = fmod, qmodel = qmod, srmodel = srmod, vmodel = vmod, n1model = n1mod)
 stk01 <- stk7 + fit01
 
-# Residuals
+#### Residuals ----
 res01 <- residuals(fit01, stk7, idx7)
 plot(res01)
 
-# Retro analysis plot with monrho values
+#### Selectivity and catchability plot  ----
+fitted <- predict(pars(fit01))
+
+a  <- xyplot(data~age,groups=year,stk01@harvest,type='b',ylim=c(0,1),ylab='F',main='Fishing mortality')
+a1 <- xyplot(data~age,groups=year,data=fitted$qmodel[1],type='b',ylab='Catchability',main="Porcupine")
+a2 <- xyplot(data~age,groups=year,data=fitted$qmodel[2],type='b',ylab='Catchability',main="IGFS")
+a3 <- xyplot(data~age,groups=year,data=fitted$qmodel[3],type='b',ylab='Catchability',main="EVHOE")
+grid.arrange(a,a1,a2, a3, ncol=2)
+
+#### Observed and predicted catches plot  ----
+
+fits <- simulate(fit01, 1000)
+stks <- stk7 + fits
+
+pred <- catch(stks)   # FLQuant con iter = 1000
+
+pred_median <- apply(pred, 2, median, na.rm = TRUE)
+pred_p5     <- apply(pred, 2, quantile, 0.05, na.rm = TRUE)
+pred_p95    <- apply(pred, 2, quantile, 0.95, na.rm = TRUE)
+
+df <- tibble(
+  Year      = as.numeric(dimnames(pred)$year),
+  Observed  = as.numeric(catch(stock)),
+  Median    = as.numeric(pred_median),
+  P5        = as.numeric(pred_p5),
+  P95       = as.numeric(pred_p95)
+)
+
+ggplot(df, aes(x = Year)) +
+  geom_ribbon(aes(ymin = P5, ymax = P95),
+              fill = "steelblue", alpha = 0.25) +
+  geom_line(aes(y = Median, color = "Predicted"), size = 1.2) +
+  geom_line(aes(y = Observed, color = "Observed"), size = 1.2) +
+  scale_color_manual(values = c("Observed" = "black",
+                                "Predicted" = "steelblue4")) +
+  labs(x = "Year",
+       y = "Catch (tonnes)",
+       color = "Type") +
+  theme_bw()
+
+#### Retro analysis plot with monrho values  ----
 results <- run_retro_analysis(stk7, idx7, fit01, fmod, qmod, srmod, vmod, n1mod)
 results$rho_table <- results$rho_table %>% mutate(x = 2025, y = 0)
 results$rho_table$qname <- c("F" = "F", "SSB" = "SB", "Recruitment" = "Rec", "Catch" = "C")
@@ -200,26 +254,112 @@ plot(FLStocks(results$retro), col = 1, lwd = 1) +
   theme_bw() +
   labs(color = "N years removed")
 
-### Selectivity and catchability plot
-fitted <- predict(pars(fit01))
+### MCMC RUN ----
 
-a  <- xyplot(data~age,groups=year,stk01@harvest,type='b',ylim=c(0,1),ylab='F',main='Fishing mortality')
-a1 <- xyplot(data~age,groups=year,data=fitted$qmodel[1],type='b',ylab='Catchability',main="Porcupine")
-a2 <- xyplot(data~age,groups=year,data=fitted$qmodel[2],type='b',ylab='Catchability',main="IGFS")
-a3 <- xyplot(data~age,groups=year,data=fitted$qmodel[3],type='b',ylab='Catchability',main="EVHOE")
+## original
+# mcmc_ctrl <- SCAMCMC(
+#   mcmc   = 100000, 
+#   mcsave = 200, mcseed = 10)
+
+## Proposed by Ernesto
+mcmc_ctrl <- SCAMCMC(
+  mcmc   = 1000000, 
+  mcsave = 2000, mcseed = 10)      
+
+fits <- sca(stk7, idx7, fmodel = fmod, qmodel = qmod, srmodel = srmod, vmodel = vmod, n1model = n1mod,
+            fit = "MCMC", mcmc = mcmc_ctrl)
+stks <- stk7 + fits
+
+fit1 <- fitMedian(fits)
+stk1 <- qapply(stks, iterMedians)
+
+#### Residuals ----
+res <- residuals(fits, stk7, idx7)
+
+res_median <- residualsMedian(res)
+plot(res_median)
+
+#### Selectivity and catchability plot ----
+a  <- xyplot(data~age,groups=year,stk1@harvest,type='b',ylim=c(0,1),ylab='F',main='Fishing mortality')
+a1 <- xyplot(data~age,groups=year,data=fit1$qmodel[1],type='b',ylab='Catchability',main="Porcupine")
+a2 <- xyplot(data~age,groups=year,data=fit1$qmodel[2],type='b',ylab='Catchability',main="IGFS")
+a3 <- xyplot(data~age,groups=year,data=fit1$qmodel[3],type='b',ylab='Catchability',main="EVHOE")
 grid.arrange(a,a1,a2, a3, ncol=2)
 
-## Stock recruitment (remove years we set R to be constant)
-stk01.bh <- as.FLSR(window(stk01, start=1997), model="bevholt")
-stk01.bh <- fmle(stk01.bh)
-plot(stk01.bh)
+#### Observed and predicted catches plot  ----
+pred <- catch(stks)
 
-# segreg
-stk01.sr <- as.FLSR(window(stk01, start=1997), model="segreg")
-stk01.sr <- fmle(stk01.sr)
-plot(stk01.sr)
+pred_median <- apply(pred, 2, median, na.rm = TRUE)
+pred_p5     <- apply(pred, 2, quantile, 0.05, na.rm = TRUE)
+pred_p95    <- apply(pred, 2, quantile, 0.95, na.rm = TRUE)
 
-## reference points
-stk01.rp <- FLBRP(stk01, stk01.bh)
-stk01.rp <- brp(stk01.rp)
-refpts(stk01.rp)
+df <- tibble(
+  Year      = as.numeric(dimnames(pred)$year),
+  Observed  = as.numeric(catch(stock)),
+  Median    = as.numeric(pred_median),
+  P5        = as.numeric(pred_p5),
+  P95       = as.numeric(pred_p95)
+)
+
+ggplot(df, aes(x = Year)) +
+  geom_ribbon(aes(ymin = P5, ymax = P95),
+              fill = "steelblue", alpha = 0.25) +
+  geom_line(aes(y = Median, color = "Predicted"), size = 1.2) +
+  geom_line(aes(y = Observed, color = "Observed"), size = 1.2) +
+  scale_color_manual(values = c("Observed" = "black",
+                                "Predicted" = "steelblue4")) +
+  labs(x = "Year",
+       y = "Catch (tonnes)",
+       color = "Type") +
+  theme_bw()
+
+#### Retro  ----
+results <- run_retro_analysis_mcmc(stk7, idx7,
+                                   fits, fmod, qmod,
+                                   srmod, vmod, n1mod,
+                                   mcmc_ctrl,
+                                   back = 5)
+
+results$rho_table <- results$rho_table %>% mutate(x = 2025, y = 0)
+results$rho_table$qname <- c("F" = "F", "SSB" = "SB", "Recruitment" = "Rec", "Catch" = "C")
+
+new_names <- c("Rec" = "Recruitment", "SB" = "SSB", "C" = "Catch", "F" = "F")
+plot(FLStocks(results$retro), col = 1, lwd = 1) +
+  facet_wrap(~qname, scales = 'free_y', labeller = labeller(qname = new_names)) +
+  geom_text(
+    data = results$rho_table,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    hjust = 1, vjust = 0) +
+  theme_bw() +
+  labs(color = "N years removed")
+
+#### MCMC diagnostic  ----
+library(coda)
+
+fits_b <- burnin(fits, 400)
+
+##### Traceplot  ----
+fitmc01.mc <- FLa4a::as.mcmc(fits_b)
+traceplot(mcmc.list(mc01=fitmc01.mc[,1]), lwd=1.5, col=c(2,4), lty=1)
+
+##### Autocorrelation and crosscorrelation analysis  ----
+acfplot(fitmc01.mc[,1], lwd=3, ylim=c(-1, 1))
+crosscorr.plot(fitmc01.mc)
+
+##### Geweke diagnostic  ----
+geweke.plot(fitmc01.mc[,1])
+
+##### Cumulative means  ----
+cm01 <- fitmc01.mc[,1]
+cm01 <- cumsum(cm01) / seq_along(cm01)
+plot(cm01, type="l", xlab="samples", ylab="mean")
+
+##### Distribution density  ----
+densplot(fitmc01.mc[,1])
+
+##### Acceptance rate  ----
+data.frame(hessian_scale=c(fitSumm(fits)), row.names=rownames(fitSumm(fits)))
+
+data.frame(hessian_scale=c(autocorr.diag(fitmc01.mc[,1])),
+           row.names=c(0, 1, 5, 10, 50))
