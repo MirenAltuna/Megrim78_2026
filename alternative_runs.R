@@ -177,26 +177,26 @@ idx7[[2]] <- reduce_pg_index(idx7[[2]], 7)
 idx7[[3]] <- reduce_pg_index(idx7[[3]], 7)
 idx7[[3]]@index[,"2017"] <- NA
 
-idx7[[1]]@index[ac(1:3),ac(2015:2021)] <- NA # Porcupine
-idx7[[2]]@index[ac(1:3),ac(2015:2021)] <- NA # IGFS
-idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
+#index(idx7[[3]]) <- replaceZeros(index(idx7)[[3]], frac=0.1)
+
+# idx7[[1]]@index[ac(1:3),ac(2015:2021)] <- NA # Porcupine
+# idx7[[2]]@index[ac(1:3),ac(2015:2021)] <- NA # IGFS
+# idx7[[3]]@index[ac(1:3),ac(2015:2021)] <- NA # EVHOE
 
 ## The best setting until now ----
 
-srmod <- ~ bevholt(CV = 0.3)
-fmod <- ~s(age, k = 7, by = breakpts(year, 2013)) + s(year, k=10) + ti(age, year, k=c(6,10))
-qmod <- list(~s(age, k = 5), ~s(age, k = 3), ~s(age, k = 5))
+srmod <- ~ bevholt(CV = 0.1)
+fmod <- ~s(replace(age, age>6,6), k = 6, by = breakpts(year, 2013)) + s(year, k=20)# +ti(age, year, k=c(6,10))
+qmod <- list(~s(age, k = 5), ~s(age, k = 5), ~s(age, k = 5))
 n1mod <- ~s(age, k = 5)
 vmod <- list(~s(age, k = 3), ~1, ~1, ~1) 
 
-
 ### Simple RUN ----
-idx7[[3]] <- window(idx7[[3]], 2003)
-stk7 <- window(stk7, 2001)
-ctn <- catch.n(stk7)
-ctn[] <- 0.2
-catch.n(stk7) <- FLQuantDistr(catch.n(stk7), ctn)
-
+#idx7[[3]] <- window(idx7[[3]], 2003)
+#stk7 <- window(stk7, 2001)
+# ctn <- catch.n(stk7)
+# ctn[] <- 0.5
+# catch.n(stk7) <- FLQuantDistr(catch.n(stk7), ctn)
 
 fit01 <- sca(stk7, idx7, fmodel = fmod, qmodel = qmod, srmodel = srmod, vmodel = vmod, n1model = n1mod)
 stk01 <- stk7 + fit01
@@ -249,6 +249,9 @@ ggplot(df, aes(x = Year)) +
 
 #### Retro analysis plot with monrho values  ----
 results <- run_retro_analysis(stk7, idx7, fit01, fmod, qmod, srmod, vmod, n1mod)
+
+fit01a <- sca(window(stk7, end=2024), window(idx7, end=2024), fmodel = fmod, qmodel = qmod, srmodel = srmod, vmodel = vmod, n1model = n1mod)
+
 
 results$rho_table <- results$rho_table %>% mutate(x = 2025, y = 0)
 results$rho_table$qname <- c("F" = "F", "SSB" = "SB", "Recruitment" = "Rec", "Catch" = "C")
